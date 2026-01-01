@@ -14,11 +14,24 @@ public class OtpService {
 
     private final OtpRepository otpRepository;
 
-    // ✅ SEND OTP
+    // ✅ SEND OTP (WITH 60s RESEND BLOCK)
     public void sendOtp(String mobile) {
 
+        // 🔒 STEP 1: last OTP check (60 seconds rule)
+        otpRepository.findTopByMobileOrderByIdDesc(mobile)
+                .filter(o -> o.getExpiryTime()
+                        .minusMinutes(4)
+                        .isAfter(LocalDateTime.now()))
+                .ifPresent(o -> {
+                    throw new RuntimeException(
+                            "OTP already sent. Please wait 60 seconds"
+                    );
+                });
+
+        // 🔢 STEP 2: generate OTP
         String otp = generateOtp();
 
+        // 💾 STEP 3: save OTP
         OtpVerification ov = new OtpVerification();
         ov.setMobile(mobile);
         ov.setOtp(otp);
@@ -27,7 +40,7 @@ public class OtpService {
 
         otpRepository.save(ov);
 
-        // 👉 अभी OTP console में
+        // 🖥 DEV MODE OUTPUT
         System.out.println("OTP for " + mobile + " = " + otp);
     }
 
@@ -35,7 +48,7 @@ public class OtpService {
     public boolean verifyOtp(String mobile, String otp) {
 
         return otpRepository.findTopByMobileOrderByIdDesc(mobile)
-                .filter(o -> !o.isVerified())
+                .filter(o -> !Boolean.TRUE.equals(o.isVerified()))
                 .filter(o -> o.getExpiryTime().isAfter(LocalDateTime.now()))
                 .filter(o -> o.getOtp().equals(otp))
                 .map(o -> {
@@ -46,11 +59,12 @@ public class OtpService {
                 .orElse(false);
     }
 
-    // ✅ OTP generator
+    // 🔐 OTP generator
     private String generateOtp() {
         return String.valueOf(100000 + new Random().nextInt(900000));
     }
 }
+
 
 //
 //package com.auth.service;
